@@ -1,0 +1,65 @@
+SIH26184 — Predictive Cash-Withdrawal Location Forecasting for Cybercrime
+
+A. Project Summary & Core Analytical Goal Convert the ~8,000 daily complaints 
+on the National Cybercrime Reporting Portal into a proactive geospatial risk 
+model that forecasts likely cash-withdrawal hotspots, enabling law-enforcement 
+and banks to pre-position intervention resources.
+
+B. Data Acquisition & Scraping Strategy
+
+Target Sources: National Cybercrime Reporting Portal (NCRP) complaint records, 
+Citizen Financial Cyber Fraud Reporting and Management System (CFCFRMS) 
+transaction-block data, RBI/bank ATM-location public registries, and I4C 
+periodic PDF threat-advisory bulletins.
+
+Ingestion Tools: Direct REST/internal API integration (where authorized) with 
+NCRP/CFCFRMS for complaint and withdrawal-attempt records; pdfplumber/camelot 
+extract tabular hotspot summaries from I4C's periodic advisory PDFs; playwright 
+retrieves bank/ATM location listings from public banking-locator web portals for 
+geocoding reference.
+
+Schema Fields: complaint_id, report_datetime, fraud_category, amount_involved_inr, 
+withdrawal_atm_id, withdrawal_lat, withdrawal_lon, bank_code, victim_state, case_status.
+
+C. Python Processing & Specialized Engine Pipeline
+
+Processing: polars handles the high-throughput daily ingestion of ~8,000 new complaint 
+records with windowed aggregation into hourly/daily hotspot counts; duckdb executes the 
+SQL that joins complaint records to nearest ATM/bank-branch locations and computes rolling 
+7/14/30-day withdrawal-frequency rankings per geographic cell, imputing missing coordinates 
+via bank-code-to-branch lookup.
+
+Geospatial / Niche Integration: geopandas performs spatial binning (H3/hexgrid) of 
+withdrawal locations to build a smoothed risk surface robust to point-level sparsity; 
+osmnx computes drive-time isochrones around top-risk ATMs so patrol-team dispatch feasibility 
+can be quantified; pydeck renders the real-time 3D risk-heatmap dashboard referenced directly 
+in the problem statement's "Risk Heatmap Dashboard" deliverable.
+
+D. Enterprise Data Warehousing (Star Schema)
+
+Fact Table: fact_cybercrime_complaints — measures: amount_involved_inr, resolution_time_hours, 
+risk_score, recovery_flag; foreign keys: complaint_key, location_key, fraud_category_key, date_key.
+Dimension Tables: dim_location (atm_id, bank_code, district, state, h3_cell_id); dim_fraud_category 
+(fraud_type, modus_operandi, severity_tier); dim_date (date, week, is_month_end — relevant since 
+fraud spikes near salary-credit dates).
+Export Specifications: Daily-partitioned .parquet (partitioned by state/date), with a separate 
+pre-aggregated fact_hotspot_daily mart for zero-latency dashboard refresh at national scale.
+
+E. Business Intelligence Layer (Power BI / Tableau)
+
+KPI Cards & Visuals: 3D GIS risk heatmap with drill-down by time/location/crime category
+ (as explicitly specified in the PS); multi-axis chart of daily complaint volume vs. amount 
+ recovered; a decomposition tree of complaints by state → district → fraud category.
+Calculated Metrics: DAX — Recovery Rate = DIVIDE(CALCULATE(COUNTROWS(fact_cybercrime_complaints), 
+fact_cybercrime_complaints[recovery_flag]=TRUE()), COUNTROWS(fact_cybercrime_complaints)); 
+
+High-Risk Hotspot Count = CALCULATE(DISTINCTCOUNT(fact_cybercrime_complaints[location_key]), 
+fact_cybercrime_complaints[risk_score] >= 0.75).
+
+F. Future ML & AI Evolution Roadmap
+
+Target Variable: Probability of a fraudulent cash withdrawal occurring at a given ATM/hexcell within the next 24–72 hours.
+Engineered Features: Rolling withdrawal-attempt counts per hexcell, complaint-to-withdrawal time lag, ATM density, distance 
+to state border (jurisdiction-hopping pattern), day-of-month salary-cycle flag.
+Model Type: Spatial regression / spatio-temporal point-process model (e.g., self-exciting Hawkes process or GNN), feeding a 
+future Agentic AI dispatch-recommendation layer for law-enforcement coordination.
