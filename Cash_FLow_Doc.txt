@@ -1,65 +1,76 @@
-SIH26184 — Predictive Cash-Withdrawal Location Forecasting for Cybercrime
+Predictive Cash-Withdrawal & Cybercrime Analytics Pipeline
 
-A. Project Summary & Core Analytical Goal Convert the ~8,000 daily complaints 
-on the National Cybercrime Reporting Portal into a proactive geospatial risk 
-model that forecasts likely cash-withdrawal hotspots, enabling law-enforcement 
-and banks to pre-position intervention resources.
+A. Project Summary & Core Analytical Goal
+The primary objective of this project is to ingest, clean, standardize, and model multi-source banking, socio-economic, and cybercrime datasets across India. By doing so, the project establishes a robust analytical foundation to analyze the complex relationships between banking infrastructure (ATMs, PoS, Cards), socio-economic indicators (GDP, literacy, unemployment), and cyber/financial fraud incidents. The ultimate goal is to pave the way for proactive spatial-temporal hotspot forecasting and risk profiling of fraudulent cash-withdrawals.
 
-B. Data Acquisition & Scraping Strategy
-
-Target Sources: National Cybercrime Reporting Portal (NCRP) complaint records, 
-Citizen Financial Cyber Fraud Reporting and Management System (CFCFRMS) 
-transaction-block data, RBI/bank ATM-location public registries, and I4C 
-periodic PDF threat-advisory bulletins.
-
-Ingestion Tools: Direct REST/internal API integration (where authorized) with 
-NCRP/CFCFRMS for complaint and withdrawal-attempt records; pdfplumber/camelot 
-extract tabular hotspot summaries from I4C's periodic advisory PDFs; playwright 
-retrieves bank/ATM location listings from public banking-locator web portals for 
-geocoding reference.
-
-Schema Fields: complaint_id, report_datetime, fraud_category, amount_involved_inr, 
-withdrawal_atm_id, withdrawal_lat, withdrawal_lon, bank_code, victim_state, case_status.
+B. Data Acquisition & Processing Strategy
+- Target Sources:
+  1. Indian Banks Financials: Yearly balance sheets containing deposits, advances, assets, net profit, NPA ratios, return on assets (ROA), and capital adequacy ratios.
+  2. RBI ATM & Card Statistics: Monthly infrastructure metrics by bank, including on-site/off-site ATMs, PoS terminals, micro-ATMs, UPI QR codes, Bharat QR codes, and outstanding credit/debit cards.
+  3. Bank Transactions: Individual transaction logs containing TransactionID, CustomerID, CustomerDOB, CustGender, CustLocation, CustAccountBalance, TransactionDate, TransactionTime, and TransactionAmount_INR.
+  4. India Crime & Socio-Economic Data: District/state-level socio-economic indicators (GDP per capita, literacy, poverty, unemployment) combined with violent, property, and cybercrime indices.
+  5. Parliament Session Reports: National macro trends of cyber incidents, defrauded amounts, and reported fraud volumes.
+- Ingestion & Cleaning:
+  - Standardizes bank names (e.g., mapping "State Bank of India LTD.", "STATE BANK OF INDIA", and "SBI" to a canonical name).
+  - Normalizes state and union territory naming conventions using a predefined mapping (e.g., standardizing variations of "J&K" or "Daman & Diu").
+  - Validates and parses datetime elements (DOBs, dates) and transaction amounts, dropping duplicates, null values, and summary rows (such as "ALL INDIA" or "TOTAL").
 
 C. Python Processing & Specialized Engine Pipeline
+- Core Processing Layer:
+  - polars: Leveraged for high-throughput, multi-threaded columnar processing of high-volume datasets (e.g., cleaning and analyzing 1M+ bank transactions).
+  - pandas & numpy: Used for standard DataFrame manipulation, formatting, and schema validation.
+  - duckdb: An in-process SQL OLAP engine used to perform zero-overhead joins and windowed aggregations across bank financial datasets, transaction lists, and state-level crime indices.
+- Geospatial & Spatial Indexing:
+  - geopandas & shapely: Used to perform vector spatial manipulations and geographic boundary operations.
+  - h3 (Uber H3): Computes global hierarchical hexagonal spatial indexes, allowing spatial binning of transaction amounts and crime occurrences to map risk densities.
+  - osmnx: Models road networks and drive-time isochrones to assess bank-to-patrol dispatch and ATM accessibility.
+  - pydeck & folium: Renders interactive, high-performance 3D spatial risk heatmaps and Leaflet-based density plots.
+- NLP & Text Extraction:
+  - spacy: Named Entity Recognition (NER) is used to extract geographic entities and crime modus operandi from unstructured incident notes and threat advisories.
 
-Processing: polars handles the high-throughput daily ingestion of ~8,000 new complaint 
-records with windowed aggregation into hourly/daily hotspot counts; duckdb executes the 
-SQL that joins complaint records to nearest ATM/bank-branch locations and computes rolling 
-7/14/30-day withdrawal-frequency rankings per geographic cell, imputing missing coordinates 
-via bank-code-to-branch lookup.
+D. Enterprise Data Warehousing (Star & Snowflake Schema)
+To support multi-dimensional analytical queries in Business Intelligence tools, the normalized and merged data is modeled into a Star/Snowflake schema:
+- Fact Tables:
+  1. fact_bank_transactions:
+     - Measures: TransactionAmount_INR, CustAccountBalance
+     - Foreign Keys: customer_key, location_key, date_key, bank_key
+  2. fact_bank_financials_annual:
+     - Measures: Deposits_Cr, Advances_Cr, Total_Assets_Cr, Net_Profit_Cr, Gross_NPA_Cr, Net_NPA_Cr, Net_NPA_Pct, Return_on_Assets_Pct, Capital_Adequacy_Ratio_Pct, Credit_Deposit_Ratio, ATMs_Total, ATMs_OnSite, ATMs_OffSite, PoS_Terminals, Micro_ATMs, UPI_QR_Codes, Bharat_QR_Codes
+     - Foreign Keys: bank_key, date_key
+  3. fact_state_crime_socioeconomic:
+     - Measures: Violent_Crimes, Property_Crimes, Cyber_Crimes, Total_Crimes_Reported, Crime_Rate_Per_100K, GDP_Per_Capita_INR, Literacy_Rate_Pct, Poverty_Rate_Pct, Unemployment_Rate_Pct, Cyber_Incidents_2016, Cyber_Incidents_2017, Cyber_Incidents_2018, Cyber_Crime_Rate_2018, Cyber_Fraud_Incidents, Cyber_Fraud_Amount_Reported_Lakh, Cyber_Fraud_Lien_Amount_Lakh, Cyber_Fraud_Refunded_Amount_Lakh
+     - Foreign Keys: state_key, date_key
+- Dimension Tables:
+  - dim_bank: bank_key, bank_name, bank_type (Public, Private, Foreign)
+  - dim_state: state_key, state_name, region_tier
+  - dim_customer: customer_key, customer_id, gender, dob, age_group
+  - dim_location: location_key, location_name (city/district), state_key, latitude, longitude, h3_cell_id
+  - dim_date: date_key, full_date, day_of_week, month, year, quarter, is_month_end (crucial for detecting salary-cycle fraud surges)
+- Storage & Partitioning: 
+  - Outputs are serialized into daily/annual-partitioned .parquet format via pyarrow to support zero-latency analytical aggregations.
 
-Geospatial / Niche Integration: geopandas performs spatial binning (H3/hexgrid) of 
-withdrawal locations to build a smoothed risk surface robust to point-level sparsity; 
-osmnx computes drive-time isochrones around top-risk ATMs so patrol-team dispatch feasibility 
-can be quantified; pydeck renders the real-time 3D risk-heatmap dashboard referenced directly 
-in the problem statement's "Risk Heatmap Dashboard" deliverable.
-
-D. Enterprise Data Warehousing (Star Schema)
-
-Fact Table: fact_cybercrime_complaints — measures: amount_involved_inr, resolution_time_hours, 
-risk_score, recovery_flag; foreign keys: complaint_key, location_key, fraud_category_key, date_key.
-Dimension Tables: dim_location (atm_id, bank_code, district, state, h3_cell_id); dim_fraud_category 
-(fraud_type, modus_operandi, severity_tier); dim_date (date, week, is_month_end — relevant since 
-fraud spikes near salary-credit dates).
-Export Specifications: Daily-partitioned .parquet (partitioned by state/date), with a separate 
-pre-aggregated fact_hotspot_daily mart for zero-latency dashboard refresh at national scale.
-
-E. Business Intelligence Layer (Power BI / Tableau)
-
-KPI Cards & Visuals: 3D GIS risk heatmap with drill-down by time/location/crime category
- (as explicitly specified in the PS); multi-axis chart of daily complaint volume vs. amount 
- recovered; a decomposition tree of complaints by state → district → fraud category.
-Calculated Metrics: DAX — Recovery Rate = DIVIDE(CALCULATE(COUNTROWS(fact_cybercrime_complaints), 
-fact_cybercrime_complaints[recovery_flag]=TRUE()), COUNTROWS(fact_cybercrime_complaints)); 
-
-High-Risk Hotspot Count = CALCULATE(DISTINCTCOUNT(fact_cybercrime_complaints[location_key]), 
-fact_cybercrime_complaints[risk_score] >= 0.75).
+E. Business Intelligence & Exploratory Visualization Layer (Power BI, Tableau, hvPlot & PyGWalker)
+- Power BI / Tableau Interactive Dashboards:
+  - Socio-Economic vs Cybercrime Correlation: A dashboard displaying the correlation between literacy rates/GDP per capita and cybercrime rates. Includes drill-downs from national level to individual state/UT metrics.
+  - Infrastructure Density & Fraud Overlays: Interactive GIS heatmaps displaying ATM, PoS, and QR code distributions, overlaid with hot zones showing high rates of cyber fraud incidents.
+  - Banking Health & Risk Performance: Visualizes bank deposits, assets, Net Profits, and NPA percentages grouped by bank type.
+  - Calculated Metrics (DAX / Tableau LOD):
+    - DAX: Cyber Fraud Intensity = DIVIDE(SUM(fact_state_crime_socioeconomic[Cyber_Fraud_Amount_Reported_Lakh]), SUM(fact_state_crime_socioeconomic[GDP_Per_Capita_INR]))
+    - Tableau LOD: { FIXED [State_UT] : SUM([ATMs_Total]) } / { FIXED [State_UT] : AVG([Population_Estimate]) } * 100000 (calculating ATM density per 100,000 citizens)
+    - DAX: Bank NPA Risk = IF(fact_bank_financials_annual[Net_NPA_Pct] > 5.0, "Critical NPA Risk", "Stable NPA")
+- Python Exploratory Visualization (EDA):
+  - hvplot: Integrated within the Jupyter Notebook framework (`main.ipynb`) to create high-level interactive visualizations. Examples include:
+    - Time-series line plots showing national cyber incident trends.
+    - Scatter plots mapping transaction sizes against account balances with interactive tooltip details.
+    - Categorical bar and box plots comparing transaction amounts across genders and age groups.
+  - pygwalker: Embedded Tableau-like visual explorer inside Jupyter Notebooks. It permits fast drag-and-drop data visualization and prototyping on the processed bank transactions and crime datasets without writing extra boilerplate code.
 
 F. Future ML & AI Evolution Roadmap
-
-Target Variable: Probability of a fraudulent cash withdrawal occurring at a given ATM/hexcell within the next 24–72 hours.
-Engineered Features: Rolling withdrawal-attempt counts per hexcell, complaint-to-withdrawal time lag, ATM density, distance 
-to state border (jurisdiction-hopping pattern), day-of-month salary-cycle flag.
-Model Type: Spatial regression / spatio-temporal point-process model (e.g., self-exciting Hawkes process or GNN), feeding a 
-future Agentic AI dispatch-recommendation layer for law-enforcement coordination.
+- Target Variables:
+  - Predict the probability of a fraudulent cash withdrawal occurring in a specific H3 spatial cell.
+  - Categorize bank transactions as normal, suspicious, or high-risk for cyber-fraud.
+- Engineered Features:
+  - Banking Penetration Index: Ratio of active cards, UPI QR codes, and ATMs to the state population.
+  - Socio-Economic Deprivation Quotient: Combination of unemployment, literacy, and poverty rates.
+  - Transaction Velocity & Outliers: Moving average of transaction frequency and deviations from normal balance-to-withdrawal ratios.
+- Model Types: Spatio-temporal point-process models (e.g., self-exciting point processes), Random Forests, XGBoost, and neural network autoencoders for anomaly detection, feeding a future AI dispatch recommendation system for bank fraud mitigation.
