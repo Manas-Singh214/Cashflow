@@ -1,4 +1,12 @@
 ﻿# ==============================================================================
+# PROJECT / ENVIRONMENT
+# ==============================================================================
+python-dotenv>=1.0.0     # Loads config from .env for portable path overrides
+jupyter>=1.0.0           # Notebook runtime (nbconvert, ipykernel, etc.)
+ipykernel>=6.29.0        # Jupyter kernel used to execute main.ipynb
+ipywidgets>=8.1.0        # Interactive widgets (used by pygwalker/hvplot in Jupyter)
+
+# ==============================================================================
 # DATA INGESTION & WEB SCRAPING
 # ==============================================================================
 pdfplumber>=0.10.0       # High-precision tabular data parsing from PDFs

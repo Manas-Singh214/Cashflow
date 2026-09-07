@@ -14,12 +14,36 @@ import re
 import warnings
 import pandas as pd
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # loads variables from a .env file in the project root, if present
+except ImportError:
+    pass  # python-dotenv is optional; the pipeline still works with plain env vars
+
 warnings.filterwarnings("ignore")
 
-BASE      = r"d:\Projects\Data Analyst Portfolio\Complete DA"
-BANK_DIR  = os.path.join(BASE, "DATASETS", "Bank Records")
-CRIME_DIR = os.path.join(BASE, "DATASETS", "Crime Records")
-OUT_DIR   = os.path.join(BASE, "MERGED DATASETS")
+
+def _env(name, default):
+    """os.getenv() that treats an unset OR blank ('') variable as 'not set'.
+
+    A `.env.example`-derived `.env` ships with every key present but blank
+    (e.g. `PROJECT_BASE_DIR=`), so plain os.getenv(name, default) would
+    return '' instead of falling back to the sensible default. This helper
+    fixes that.
+    """
+    val = os.getenv(name)
+    return val if val else default
+
+
+# ─── Portable path configuration ────────────────────────────────────────────
+# BASE defaults to the directory this script lives in (the project root),
+# so the pipeline runs unmodified on Windows, macOS, and Linux, and works
+# regardless of where the repository is cloned. Override any of these via
+# a `.env` file or real environment variables if your layout differs.
+BASE      = _env("PROJECT_BASE_DIR", os.path.dirname(os.path.abspath(__file__)))
+BANK_DIR  = _env("BANK_DATA_DIR",  os.path.join(BASE, "DATASETS", "Bank Records"))
+CRIME_DIR = _env("CRIME_DATA_DIR", os.path.join(BASE, "DATASETS", "Crime Records"))
+OUT_DIR   = _env("MERGED_OUTPUT_DIR", os.path.join(BASE, "MERGED DATASETS"))
 os.makedirs(OUT_DIR, exist_ok=True)
 
 

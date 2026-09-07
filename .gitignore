@@ -1,0 +1,45 @@
+# ==============================================================================
+# Predictive Cash-Withdrawal & Cybercrime Analytics Pipeline — .gitignore
+# ==============================================================================
+
+# ─── Environment & secrets ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── Python virtual environment ──────────────────────────────────────────────
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ─── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ─── Raw & processed datasets (large, regenerable via data_merge.py) ────────
+# Source CSVs/XLS in DATASETS/ and the pipeline outputs in "MERGED DATASETS/"
+# are excluded from version control to keep the repository lightweight.
+# Re-run `python data_merge.py` after cloning to regenerate the merged files
+# locally (source files in DATASETS/ must be supplied separately).
+DATASETS/
+MERGED DATASETS/
+data/MERGED_DATASETS/
+data/WAREHOUSE/
+
+# Keep small, version-controlled geo reference data used by the notebook
+!data/geo/
+!data/geo/**
+
+# ─── OS / editor cruft ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ─── Misc build artifacts ────────────────────────────────────────────────────
+*.log
+*.tmp
+pydeck_*.html
