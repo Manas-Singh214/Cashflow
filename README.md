@@ -7,15 +7,6 @@ This project ingests, cleans, merges, and models multi-source banking, socio-eco
 
 ## ⚙️ Virtual Environment Setup & Installation
 
-### Option 1: Automatic Setup (One-Click / One Command)
-- **Windows Command Prompt / Double-click**: Run [`setup_venv.bat`](file:///d:/Projects/Data%20Analyst%20Portfolio/Complete%20DA/setup_venv.bat)
-- **PowerShell**:
-  ```powershell
-  .\setup_venv.ps1
-  ```
-
-### Option 2: Manual Setup
-
 1. **Create the virtual environment**:
    ```bash
    python -m venv .venv
@@ -41,11 +32,34 @@ This project ingests, cleans, merges, and models multi-source banking, socio-eco
    pip install -r requirements.txt
    ```
 
+4. **Configure environment variables (optional)**:
+   ```bash
+   cp .env.example .env
+   ```
+   Every setting has a sensible default relative to the project root, so this step is optional — `.env` exists purely so paths (`DATASETS/`, `MERGED DATASETS/`, the India GeoJSON) can be overridden without touching code. `.env` is git-ignored; only `.env.example` is committed.
+
+5. **Regenerate the merged datasets** (source CSVs in `DATASETS/` are git-ignored and must be supplied locally):
+   ```bash
+   python data_merge.py
+   ```
+
+6. **Run the EDA notebook**:
+   ```bash
+   jupyter lab main.ipynb
+   # or, headlessly:
+   jupyter nbconvert --to notebook --execute --inplace main.ipynb
+   ```
+
+### 🗂️ Portability & Git Hygiene Notes
+- `data_merge.py` and `main.ipynb` resolve all data paths **relative to the project root** (or via `.env` overrides) — no hardcoded Windows drive letters, so the pipeline runs unmodified on Windows, macOS, and Linux.
+- The Plotly/Folium India state-boundary map used by the choropleth cells is a small, version-controlled GeoJSON at `data/geo/india_states.geojson` — the notebook renders fully **offline** (the original master notebook depended on an external gist URL that has since gone dead — a 404).
+- `DATASETS/` and `MERGED DATASETS/` (raw sources + pipeline outputs, some 60–75 MB) are **git-ignored** to keep the repository lightweight; they were also removed from git's tracked history (`git rm --cached`) without touching the files on disk. Re-run `python data_merge.py` after cloning to regenerate the merged CSVs locally.
+
 ---
 
 ## 📚 Tech Stack & Library Ecosystem
 
-The project dependencies in [`requirements.txt`](file:///d:/Projects/Data%20Analyst%20Portfolio/Complete%20DA/requirements.txt) are organized into specialized layers:
+The project dependencies in `requirements.txt` are organized into specialized layers:
 
 ### 1. Data Ingestion & Extraction
 - **`pdfplumber`**: High-precision tabular data parsing from threat advisories and PDF reports.
@@ -92,7 +106,7 @@ Raw data comes from multiple distinct sources (RBI statistics, state crime burea
 
 ## 🗂️ Processed Datasets (Pipeline Outputs)
 
-The pipeline produces **4 clean datasets** in [`MERGED DATASETS/`](file:///d:/Projects/Data%20Analyst%20Portfolio/Complete%20DA/MERGED%20DATASETS):
+The pipeline produces **4 clean datasets** in `MERGED DATASETS/`:
 
 | Output File | Key Sources | Contents |
 | :--- | :--- | :--- |
